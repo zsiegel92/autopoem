@@ -1,0 +1,4 @@
+__pycache__/
+.env
+datamuse/__pycache__/
+datamuse_env/
