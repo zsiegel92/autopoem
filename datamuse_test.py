@@ -33,6 +33,7 @@ from datamuse.scripts import dm_to_df
 from str_utils import is_one_away,too_similar
 import pandas
 
+
 pandas.set_option('display.max_columns', None)
 pandas.set_option('display.max_rows', 200)
 
@@ -132,15 +133,16 @@ class DatamuseClient():
 		print("\n\nWORD1")
 		q=dict(lc='jewish',topics='politics student nonprofit activism',md='sp')
 		safedict=dict(rel_rhy=name)
-		trait = dmc.get_safely('n',qdict=q,safedict=safedict)
+		noun1 = dmc.get_safely('n',qdict=q,safedict=safedict)
 
 		print("WORD2")
-		q=dict(rc=generalize(trait),md='sp')
+		q=dict(rc=generalize(noun1),md='sp')
+		safedict=dict()
 		descriptor = dmc.get_safely('adj',qdict=q,safedict=safedict)
 
 		print("WORD3")
 		q=dict(topics='politics',md='sp')
-		safedict=dict(rel_rhy=generalize(trait))
+		safedict=dict(rel_rhy=generalize(noun1))
 		verb1 = dmc.get_safely('v',qdict=q,safedict=safedict)
 
 
@@ -151,7 +153,7 @@ class DatamuseClient():
 
 		print("WORD5")
 		q=dict(md='sp')
-		safedict=dict(sl=generalize(trait),lc=generalize(verb1))
+		safedict=dict(sl=generalize(noun1),lc=generalize(verb1))
 		verb2 = dmc.get_safely('v',qdict=q,safedict=safedict)
 
 		print("WORD6")
@@ -160,16 +162,54 @@ class DatamuseClient():
 		adverb2 = dmc.get_safely('adv',qdict=q,safedict=safedict)
 
 
-		stanz=f"{name}, {name},\nand the {descriptor} {trait}.\nThey {adverb1} {verb1};\nthey {adverb2} {verb2}."
+		stanz=f"{name}, {name},\nand the {descriptor} {noun1}.\nThey {adverb1} {verb1};\nthey {adverb2} {verb2}."
 		return stanz
+	def process_digraph(self,G):
+		internal_tags=('pos','val')
+		words = {}
+		# for nodename,nbrsdict in G.adjacency_iter():
+		# 	# print(G.node[nodename]) #has attributes
+		# 	if 'val' in G.node[nodename]:
+		# 		words[nodename]=G.node[nodename][val]
+		# 		self.taboo.append(words[nodename])
+		# 	# for nbr,eattr in nbrsdict.items():
+		# 	# 	if 'weight' in eattr:
+		# 	# 		(nodename,nbr,eattr['weight'])
+		while len(words)< len(G):
+			for node,nodedata in G.nodes()._nodes.items():
+				if node not in words:
+					if set(G.predecessors(node))<=set(words):
+						#Word is ready to process
+						if 'val' in nodedata:
+							words[node]=nodedata['val']
+							self.taboo.append(words[node])
+						else:
+							q=dict(md='sp',**{key:val for key,val in nodedata.items() if key not in internal_tags})
+							safedict={G.edges[pred,node]['att']:self.generalize(words[pred]) for pred in G.predecessors(node)}
+							words[node]=dmc.get_safely(G.node[node]['pos'],qdict=q,safedict=safedict)
+
+		return words
 
 if __name__=='__main__':
-	names = ['Jonathan','Adam']
-	dmc =DatamuseClient(taboo=names)
-	stanza1=dmc.stanza(names[0])
-	stanza2=dmc.stanza(names[1])
-	print(f"{names[0]} and {names[1]}\n\n{stanza1}\n\n{stanza2}")
+	# names = ['Jonathan','Adam']
+	dmc =DatamuseClient()
+	# stanza1=dmc.stanza(names[0])
+	# stanza2=dmc.stanza(names[1])
+	# print(f"{names[0]} and {names[1]}\n\n{stanza1}\n\n{stanza2}")
+	from vocab_poset import G
 
+	words = dmc.process_digraph(G)
+	stanz1=f"\n\n{words['name1']}, {words['name1']},\nand the {words['adj1']} {words['n1']}.\nThey {words['adv1']} {words['v1']};\nthey {words['adv2']} {words['v2']}."
+
+	stanz2=f"\n\n{words['name2']}, {words['name2']},\nand the {words['adj2']} {words['n2']}.\nThey {words['adv3']} {words['v3']};\nthey {words['adv4']} {words['v4']}."
+
+	poem = f"\n\n\n{words['name1']} and {words['name2']}\n{stanz1}{stanz2}"
+
+	print(poem)
+	print()
+
+	with open('autopoems.txt','a') as myfile:
+		myfile.write(poem)
 
 
 
